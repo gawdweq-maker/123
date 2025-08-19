@@ -1,23 +1,20 @@
-import asyncio
+# main.py
+import os
+import threading
 import uvicorn
-from multiprocessing import Process
-from bot import dp, bot
-from aiogram.utils import executor
-from admin import app
 
-def start_bot():
+from admin import app          # FastAPI приложение
+from bot import dp, executor   # aiogram
+
+def run_bot():
+    # polling блокирующий, поэтому запускаем его в отдельном потоке
     executor.start_polling(dp, skip_updates=True)
 
-def start_admin():
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+def run_api():
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
 
 if __name__ == "__main__":
-    # запускаем оба процесса параллельно
-    p1 = Process(target=start_bot)
-    p2 = Process(target=start_admin)
-
-    p1.start()
-    p2.start()
-
-    p1.join()
-    p2.join()
+    t = threading.Thread(target=run_bot, daemon=True)
+    t.start()
+    run_api()
