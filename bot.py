@@ -14,11 +14,11 @@ def norm(url: str) -> str:
     return url if url.endswith("/") else url + "/"
 
 BASE = norm(os.getenv("PANEL_URL") or os.getenv("RENDER_EXTERNAL_URL") or "http://localhost:8000/")
-WEBAPP_URL = BASE + "twa"   # <<< открываем специальный путь
+WEBAPP_URL = BASE + "twa"   # строго /twa
 
 KEYS_FILE = "keys.txt"
 
-# ---- storage helpers ----
+# --- storage ---
 def load_keys():
     try:
         with open(KEYS_FILE, "r", encoding="utf-8") as f:
@@ -38,7 +38,7 @@ def pop_keys(n: int):
     save_keys(rest)
     return out, len(keys)
 
-# ---- bot ----
+# --- bot ---
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 
@@ -49,12 +49,13 @@ async def start(message: types.Message):
 async def send_webapp_button(message: types.Message):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
     kb.add(types.KeyboardButton(text="Открыть панель", web_app=types.WebAppInfo(url=WEBAPP_URL)))
+    # Нужен непустой текст → используем LRM
     try:
-        await message.answer("\u200E", reply_markup=kb)  # непустой текст
+        await message.answer("\u200E", reply_markup=kb)
     except Exception:
         await message.answer(".", reply_markup=kb)
 
-# Пополнение: !k1/k2/k3
+# Пополнение склада: !k1/k2/k3 (через / и/или переносы)
 @dp.message_handler(lambda m: m.text and m.text.startswith("!"))
 async def add_keys(message: types.Message):
     raw = message.text[1:]
