@@ -10,13 +10,11 @@ TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise RuntimeError("Env var BOT_TOKEN is not set")
 
-# URL панели: PANEL_URL > RENDER_EXTERNAL_URL > локалка
-def with_trailing_slash(url: str) -> str:
+def norm(url: str) -> str:
     return url if url.endswith("/") else url + "/"
 
-WEBAPP_URL = with_trailing_slash(
-    os.getenv("PANEL_URL") or os.getenv("RENDER_EXTERNAL_URL") or "http://localhost:8000/"
-)
+BASE = norm(os.getenv("PANEL_URL") or os.getenv("RENDER_EXTERNAL_URL") or "http://localhost:8000/")
+WEBAPP_URL = BASE + "twa"   # <<< открываем специальный путь
 
 KEYS_FILE = "keys.txt"
 
@@ -49,22 +47,10 @@ async def start(message: types.Message):
     await send_webapp_button(message)
 
 async def send_webapp_button(message: types.Message):
-    """
-    Устойчивая web_app кнопка (как на скрине). Сообщение НЕ удаляем,
-    иначе Telegram уберёт и кнопку.
-    """
-    kb = types.ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        one_time_keyboard=False,
-        selective=False
-    )
-    kb.add(types.KeyboardButton(
-        text="Открыть панель",
-        web_app=types.WebAppInfo(url=WEBAPP_URL)
-    ))
-    # Нужен непустой текст
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+    kb.add(types.KeyboardButton(text="Открыть панель", web_app=types.WebAppInfo(url=WEBAPP_URL)))
     try:
-        await message.answer("\u200E", reply_markup=kb)  # LRM
+        await message.answer("\u200E", reply_markup=kb)  # непустой текст
     except Exception:
         await message.answer(".", reply_markup=kb)
 
