@@ -11,28 +11,14 @@ TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise RuntimeError("Env var BOT_TOKEN is not set")
 
-# URL панели: сначала PANEL_URL, иначе публичный URL Render, иначе локалка
-WEBAPP_URL = os.getenv("PANEL_URL") or os.getenv("RENDER_EXTERNAL_URL") or "http://localhost:8000/"
+# URL панели (Render / локально)
+BASE_WEBAPP_URL = os.getenv("PANEL_URL") or os.getenv("RENDER_EXTERNAL_URL") or "http://localhost:8000/"
 
 # Разрешённый админ ID
 ADMIN_ID = 1932862650
 
-# Файл для хранения ключей
-KEYS_FILE = "keys.txt"
-
-
-def load_keys():
-    try:
-        with open(KEYS_FILE, "r", encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        return []
-
-
-def save_keys(keys):
-    with open(KEYS_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(keys) + ("\n" if keys else ""))
-
+# Финальный URL с uid для проверки на сервере
+WEBAPP_URL = f"{BASE_WEBAPP_URL}?uid={ADMIN_ID}"
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
@@ -78,11 +64,25 @@ async def add_keys(message: types.Message):
         await message.answer("ℹ️ Все эти ключи уже есть в базе.")
 
 
+# ===== работа с keys.txt =====
+KEYS_FILE = "keys.txt"
+
+
+def load_keys():
+    try:
+        with open(KEYS_FILE, "r", encoding="utf-8") as f:
+            return [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        return []
+
+
+def save_keys(keys):
+    with open(KEYS_FILE, "w", encoding="utf-8") as f:
+        f.write("\n".join(keys) + ("\n" if keys else ""))
+
+
+# ===== WebApp кнопка =====
 async def send_webapp_button(message: types.Message):
-    """
-    Показывает кнопку WebApp в поле ввода (рядом со скрепкой).
-    В чате сообщения не остаётся.
-    """
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
     kb.add(
         types.KeyboardButton(
@@ -91,7 +91,7 @@ async def send_webapp_button(message: types.Message):
         )
     )
 
-    # Telegram требует НЕпустой текст → отправляем "." и сразу удаляем
+    # Telegram требует НЕпустой текст → отправляем "." и удаляем
     msg = await message.answer(".", reply_markup=kb)
     try:
         await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
