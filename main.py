@@ -7,7 +7,6 @@ from admin import app          # FastAPI приложение
 from bot import dp, executor   # aiogram
 
 def run_bot():
-    # polling блокирующий, поэтому запускаем его в отдельном потоке
     executor.start_polling(dp, skip_updates=True)
 
 def run_api():
