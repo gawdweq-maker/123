@@ -7,7 +7,6 @@ app = FastAPI()
 
 KEYS_FILE = "keys.txt"
 
-
 # -------- storage helpers --------
 def load_keys():
     try:
@@ -16,11 +15,9 @@ def load_keys():
     except FileNotFoundError:
         return []
 
-
 def save_keys(keys):
     with open(KEYS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(keys) + ("\n" if keys else ""))
-
 
 # -------- template --------
 HTML = """
@@ -75,7 +72,6 @@ HTML = """
 </html>
 """
 
-
 def render_index():
     keys = load_keys()
     items = "\n".join(
@@ -84,18 +80,15 @@ def render_index():
     ) or '<li class="muted">Пока пусто…</li>'
     return HTML.replace("{{items}}", items).replace("{{count}}", str(len(keys)))
 
-
 # -------- routes --------
 @app.get("/health")
 def health():
     return {"ok": True}
 
-
-# HEAD / — чтобы хостинг не получал 405
+# HEAD / — чтобы не было 405
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index():
     return HTMLResponse(render_index())
-
 
 @app.post("/add")
 def add_keys(keys: str = Form(...)):
@@ -107,7 +100,6 @@ def add_keys(keys: str = Form(...)):
     save_keys(existing)
     return RedirectResponse(url="/", status_code=303)
 
-
 @app.get("/delete/{key_id}")
 def delete_key(key_id: int):
     keys = load_keys()
@@ -116,12 +108,10 @@ def delete_key(key_id: int):
         save_keys(keys)
     return RedirectResponse(url="/", status_code=303)
 
-
-# CATCH-ALL: на любые пути — панель (и для HEAD тоже)
+# CATCH-ALL: любые пути → панель (и HEAD тоже)
 @app.api_route("/{path:path}", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def catch_all(path: str):
     return HTMLResponse(render_index())
-
 
 if __name__ == "__main__":
     import uvicorn
