@@ -1,11 +1,12 @@
 # admin.py
 import os
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 
 app = FastAPI()
 
 KEYS_FILE = "keys.txt"
+ADMIN_ID = 1932862650   # разрешённый Telegram ID
 
 
 def load_keys():
@@ -78,10 +79,17 @@ HTML = """
 def render_index():
     keys = load_keys()
     items = "\n".join(
-        f'<li><span>{k}</span><a href="/delete/{i}"><button class="danger">Удалить</button></a></li>'
+        f'<li><span>{k}</span><a href="/delete/{i}?uid={ADMIN_ID}"><button class="danger">Удалить</button></a></li>'
         for i, k in enumerate(keys)
     ) or '<li class="muted">Пока пусто…</li>'
     return HTML.replace("{{items}}", items).replace("{{count}}", str(len(keys)))
+
+
+# ================= Проверка доступа =================
+def check_admin(request: Request):
+    uid = request.query_params.get("uid")
+    if str(ADMIN_ID) != str(uid):
+        raise HTTPException(status_code=403, detail="⛔ Доступ запрещён")
 
 
 # ================= Маршруты =================
@@ -90,19 +98,20 @@ def health():
     return {"ok": True}
 
 
-# чтобы HEAD / не кидал 405
 @app.head("/", response_class=PlainTextResponse)
 def head_root():
     return PlainTextResponse("", status_code=200)
 
 
 @app.get("/", response_class=HTMLResponse)
-def index():
+def index(request: Request):
+    check_admin(request)
     return HTMLResponse(render_index())
 
 
 @app.post("/add")
-def add_keys(keys: str = Form(...)):
+def add_keys(request: Request, keys: str = Form(...)):
+    check_admin(request)
     existing = load_keys()
     added = []
     for raw in keys.replace(",", "\n").splitlines():
@@ -111,25 +120,25 @@ def add_keys(keys: str = Form(...)):
             existing.append(val)
             added.append(val)
     save_keys(existing)
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url=f"/?uid={ADMIN_ID}", status_code=303)
 
 
 @app.get("/delete/{key_id}")
-def delete_key(key_id: int):
+def delete_key(request: Request, key_id: int):
+    check_admin(request)
     keys = load_keys()
     if 0 <= key_id < len(keys):
         keys.pop(key_id)
         save_keys(keys)
-    return RedirectResponse(url="/", status_code=303)
+    return RedirectResponse(url=f"/?uid={ADMIN_ID}", status_code=303)
 
 
-# CATCH-ALL: чтобы в Telegram web-view не было Not Found
 @app.get("/{path:path}", response_class=HTMLResponse)
-def catch_all(path: str):
+def catch_all(request: Request, path: str):
+    check_admin(request)
     return HTMLResponse(render_index())
 
 
-# локальный запуск (на Render дергается через main.py)
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
