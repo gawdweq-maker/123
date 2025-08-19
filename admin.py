@@ -1,5 +1,4 @@
 # admin.py
-import os
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 
@@ -7,7 +6,7 @@ app = FastAPI()
 
 KEYS_FILE = "keys.txt"
 
-# -------- storage helpers --------
+# ---------- storage ----------
 def load_keys():
     try:
         with open(KEYS_FILE, "r", encoding="utf-8") as f:
@@ -19,7 +18,7 @@ def save_keys(keys):
     with open(KEYS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(keys) + ("\n" if keys else ""))
 
-# -------- template --------
+# ---------- template ----------
 HTML = """
 <!doctype html>
 <html lang="ru">
@@ -80,12 +79,17 @@ def render_index():
     ) or '<li class="muted">Пока пусто…</li>'
     return HTML.replace("{{items}}", items).replace("{{count}}", str(len(keys)))
 
-# -------- routes --------
+# ---------- routes ----------
 @app.get("/health")
 def health():
     return {"ok": True}
 
-# HEAD / — чтобы не было 405
+# Специальный маршрут для Telegram WebApp
+@app.api_route("/twa", methods=["GET", "HEAD"], response_class=HTMLResponse)
+def twa():
+    return HTMLResponse(render_index())
+
+# Корень сайта (браузер)
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index():
     return HTMLResponse(render_index())
@@ -108,12 +112,12 @@ def delete_key(key_id: int):
         save_keys(keys)
     return RedirectResponse(url="/", status_code=303)
 
-# CATCH-ALL: любые пути → панель (и HEAD тоже)
+# Абсолютный catch-all: любые пути и HEAD → панель
 @app.api_route("/{path:path}", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def catch_all(path: str):
     return HTMLResponse(render_index())
 
 if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    import uvicorn, os
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
