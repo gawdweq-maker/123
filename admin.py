@@ -1,6 +1,8 @@
-import uvicorn
+# admin.py
+import os
 from fastapi import FastAPI, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 
 KEYS_FILE = "keys.txt"
 
@@ -15,32 +17,86 @@ def load_keys():
 
 def save_keys(keys):
     with open(KEYS_FILE, "w", encoding="utf-8") as f:
-        f.write("\n".join(keys))
+        f.write("\n".join(keys) + ("\n" if keys else ""))
+
+HTML = """
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Панель</title>
+  <style>
+    body { background:#0f172a; color:#e2e8f0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell, Noto Sans, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji; margin:0; padding:24px; }
+    .wrap { max-width:820px; margin:0 auto; }
+    h1 { font-size:22px; margin:0 0 16px; }
+    .card { background:#111827; border:1px solid #1f2937; border-radius:14px; padding:16px; margin:12px 0; }
+    input[type=text] { width:100%; padding:10px 12px; border-radius:10px; border:1px solid #374151; background:#0b1220; color:#e5e7eb; outline:none; }
+    button { padding:10px 14px; border-radius:10px; border:0; background:#2563eb; color:#fff; cursor:pointer; }
+    button.danger { background:#ef4444; }
+    ul { list-style:none; padding-left:0; }
+    li { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid #1f2937; }
+    .muted { color:#9ca3af; font-size:13px; }
+    a { color:#93c5fd; text-decoration:none; }
+    .row { display:flex; gap:8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Панель управления</h1>
+
+    <div class="card">
+      <form method="post" action="/add">
+        <div class="row">
+          <input type="text" name="keys" placeholder="Вставь ключи через запятую или с новой строки" />
+          <button type="submit">Добавить</button>
+        </div>
+        <p class="muted">Файл: <code>keys.txt</code></p>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Список ключей</h3>
+      <ul>
+        {items}
+      </ul>
+      <p class="muted">Всего: {count}</p>
+    </div>
+
+    <div class="card">
+      <a href="/health">/health</a>
+    </div>
+  </div>
+</body>
+</html>
+"""
+
+def render_index():
+    keys = load_keys()
+    items = "\n".join(
+        f'<li><span>{k}</span><a href="/delete/{i}"><button class="danger">Удалить</button></a></li>'
+        for i, k in enumerate(keys)
+    ) or '<li class="muted">Пока пусто…</li>'
+    return HTML.format(items=items, count=len(keys))
+
+@app.get("/health")
+def health():
+    return {"ok": True}
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    keys = load_keys()
-    html = "<h2>📦 Склад ключей</h2>"
-    html += f"<p>Всего: {len(keys)} шт.</p><ul>"
-    for i, key in enumerate(keys):
-        html += f"<li>{key} <a href='/delete/{i}'>❌ удалить</a></li>"
-    html += "</ul>"
-
-    html += """
-    <h3>➕ Добавить ключи</h3>
-    <form method="post" action="/add">
-        <textarea name="new_keys" rows="5" cols="40" placeholder="AAA111\nBBB222\nCCC333"></textarea><br>
-        <button type="submit">Добавить</button>
-    </form>
-    """
-    return html
+    return HTMLResponse(render_index())
 
 @app.post("/add")
-def add_keys(new_keys: str = Form(...)):
-    keys = load_keys()
-    added = [k.strip() for k in new_keys.splitlines() if k.strip()]
-    keys.extend(added)
-    save_keys(keys)
+def add_keys(keys: str = Form(...)):
+    existing = load_keys()
+    added = []
+    for raw in keys.replace(",", "\n").splitlines():
+        val = raw.strip()
+        if val and val not in existing:
+            added.append(val)
+    existing.extend(added)
+    save_keys(existing)
     return RedirectResponse(url="/", status_code=303)
 
 @app.get("/delete/{key_id}")
@@ -51,5 +107,13 @@ def delete_key(key_id: int):
         save_keys(keys)
     return RedirectResponse(url="/", status_code=303)
 
+# CATCH-ALL: важно для Telegram WebApp, чтобы не было 404 Not Found
+@app.get("/{path:path}", response_class=HTMLResponse)
+def catch_all(path: str):
+    return HTMLResponse(render_index())
+
+# Локальный запуск (Render вызывает main.py)
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
