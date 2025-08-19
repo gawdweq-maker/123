@@ -6,7 +6,6 @@ from aiogram.utils import executor
 
 logging.basicConfig(level=logging.INFO)
 
-# === ENV ===
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise RuntimeError("Env var BOT_TOKEN is not set")
@@ -14,10 +13,10 @@ if not TOKEN:
 BASE_WEBAPP_URL = os.getenv("PANEL_URL") or os.getenv("RENDER_EXTERNAL_URL") or "http://localhost:8000/"
 WEBAPP_URL = BASE_WEBAPP_URL  # без uid
 
-# Файл склада
 KEYS_FILE = "keys.txt"
 
-# ===== helpers =====
+
+# ---- storage helpers ----
 def load_keys():
     try:
         with open(KEYS_FILE, "r", encoding="utf-8") as f:
@@ -25,11 +24,13 @@ def load_keys():
     except FileNotFoundError:
         return []
 
+
 def save_keys(keys):
     with open(KEYS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(keys) + ("\n" if keys else ""))
 
-def pop_keys(n):
+
+def pop_keys(n: int):
     keys = load_keys()
     take = min(n, len(keys))
     out = keys[:take]
@@ -37,22 +38,21 @@ def pop_keys(n):
     save_keys(rest)
     return out, len(keys)
 
-# ===== bot =====
+
+# ---- bot ----
 bot = Bot(token=TOKEN)
 dp = Dispatcher(bot)
 
-@dp.message_handler(commands=['start'])
+
+@dp.message_handler(commands=['start', 'panel'])
 async def start(message: types.Message):
     await send_webapp_button(message)
 
-@dp.message_handler(commands=['panel'])
-async def open_panel(message: types.Message):
-    await send_webapp_button(message)
 
 async def send_webapp_button(message: types.Message):
     """
-    Устойчивая web_app кнопка внизу чата (как на скрине).
-    Сообщение не удаляем, чтобы кнопка не исчезала.
+    Устойчивая web_app кнопка (как на скрине). Сообщение НЕ удаляем,
+    иначе Telegram уберёт и кнопку.
     """
     kb = types.ReplyKeyboardMarkup(
         resize_keyboard=True,
@@ -65,19 +65,20 @@ async def send_webapp_button(message: types.Message):
         web_app=types.WebAppInfo(url=WEBAPP_URL)
     ))
 
-    INVISIBLE = "\u200E"  # LRM
+    # Telegram требует непустой текст
     try:
-        await message.answer(INVISIBLE, reply_markup=kb)
+        await message.answer("\u200E", reply_markup=kb)  # LRM (почти невидимый)
     except Exception:
         await message.answer(".", reply_markup=kb)
 
-# --- Пополнение склада: !k1/k2/k3 (доступно всем) ---
-@dp.message_handler(lambda m: bool(m.text) and m.text.startswith("!"))
+
+# Пополнение: !k1/k2/k3
+@dp.message_handler(lambda m: m.text and m.text.startswith("!"))
 async def add_keys(message: types.Message):
     raw = message.text[1:]
     parts = [p.strip() for p in raw.replace("\n", "/").split("/") if p.strip()]
     if not parts:
-        return await message.answer("⚠️ Не найдено ключей в сообщении.")
+        return await message.answer("⚠️ Не найдено ключей.")
     existing = load_keys()
     added = 0
     for key in parts:
@@ -87,8 +88,9 @@ async def add_keys(message: types.Message):
     save_keys(existing)
     await message.answer(f"✅ Добавлено: {added}. Всего на складе: {len(existing)}.")
 
-# --- Выдача ключей по числу N (для всех) ---
-@dp.message_handler(lambda m: bool(m.text) and m.text.isdigit())
+
+# Выдача по числу N
+@dp.message_handler(lambda m: m.text and m.text.isdigit())
 async def give_keys(message: types.Message):
     n = int(message.text)
     if n <= 0:
@@ -96,9 +98,22 @@ async def give_keys(message: types.Message):
     taken, total_before = pop_keys(n)
     if not taken:
         return await message.answer("😕 Ключей нет в наличии.")
-    text = "Ваши ключи:\n" + "\n".join(taken)
     total_after = total_before - len(taken)
-    await message.answer(f"{text}\n\nОстаток на складе: {total_after}")
+    text = "Ваши ключи:\n" + "\n".join(taken) + f"\n\nОстаток на складе: {total_after}"
+    await message.answer(text)
+
+
+# Проверка остатка
+@dp.message_handler(commands=['stock'])
+async def stock(message: types.Message):
+    keys = load_keys()
+    total = len(keys)
+    if total == 0:
+        return await message.answer("📦 Склад пуст.")
+    preview = "\n".join(keys[:10])
+    more = f"\n...и ещё {total-10}" if total > 10 else ""
+    await message.answer(f"📦 На складе {total} ключей.\n\nПримеры:\n{preview}{more}")
+
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
