@@ -1,12 +1,12 @@
 # admin.py
 from fastapi import FastAPI, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, Response
 
 app = FastAPI()
 
 KEYS_FILE = "keys.txt"
 
-# ---------- storage ----------
+# -------- storage --------
 def load_keys():
     try:
         with open(KEYS_FILE, "r", encoding="utf-8") as f:
@@ -18,7 +18,7 @@ def save_keys(keys):
     with open(KEYS_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(keys) + ("\n" if keys else ""))
 
-# ---------- template ----------
+# -------- template --------
 HTML = """
 <!doctype html>
 <html lang="ru">
@@ -79,17 +79,17 @@ def render_index():
     ) or '<li class="muted">Пока пусто…</li>'
     return HTML.replace("{{items}}", items).replace("{{count}}", str(len(keys)))
 
-# ---------- routes ----------
+# -------- routes --------
 @app.get("/health")
 def health():
     return {"ok": True}
 
-# Специальный маршрут для Telegram WebApp
+# Telegram WebApp будет открывать /twa (без редиректов)
 @app.api_route("/twa", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def twa():
     return HTMLResponse(render_index())
 
-# Корень сайта (браузер)
+# Корень сайта для браузера (GET/HEAD сразу отдаём панель)
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index():
     return HTMLResponse(render_index())
@@ -112,6 +112,15 @@ def delete_key(key_id: int):
         save_keys(keys)
     return RedirectResponse(url="/", status_code=303)
 
+# favicon и robots — чтобы Telegram/вебвью не ловили 404
+@app.get("/favicon.ico")
+def favicon():
+    return Response(status_code=204, media_type="image/x-icon")
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots():
+    return PlainTextResponse("User-agent: *\nDisallow:\n")
+
 # Абсолютный catch-all: любые пути и HEAD → панель
 @app.api_route("/{path:path}", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def catch_all(path: str):
@@ -119,5 +128,4 @@ def catch_all(path: str):
 
 if __name__ == "__main__":
     import uvicorn, os
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)), log_level="info")
